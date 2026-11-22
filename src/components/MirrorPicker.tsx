@@ -6,6 +6,7 @@ import {
   activeMirror,
   addCustomMirror,
   clearCustomMirror,
+  discoverMirrors,
   mirrors,
   setActiveMirror,
 } from "@/lib/piped";
@@ -21,6 +22,15 @@ export function MirrorPicker() {
   const [, bump] = useState(0);
 
   useEffect(() => setMounted(true), []);
+
+  // Ask the server for the current public instance list, and show newly discovered mirrors
+  // without a reload.
+  useEffect(() => {
+    void discoverMirrors();
+    const refresh = () => bump((n) => n + 1);
+    window.addEventListener("ot-mirrors", refresh);
+    return () => window.removeEventListener("ot-mirrors", refresh);
+  }, []);
 
   const list = mirrors();
   const active = activeMirror();
@@ -97,6 +107,9 @@ export function MirrorPicker() {
           ))}
         </ul>
         <div className="border-t border-border p-3">
+          <p className="mb-2 text-[11px] leading-relaxed text-muted-foreground">
+            If the chosen source fails, OpenTube automatically tries other public instances too.
+          </p>
           <label htmlFor="custom-mirror" className="text-[11px] font-medium text-muted-foreground">
             Add a Piped API mirror
           </label>
@@ -124,7 +137,8 @@ export function MirrorPicker() {
           </div>
           {error && <p className="mt-1.5 text-[11px] text-destructive">{error}</p>}
           <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-            Search results, thumbnails and video all load from this host instead of YouTube.
+            Search results, thumbnails and video all load through this site, which fetches them from
+            the selected host instead of YouTube.
           </p>
           {hasCustom && (
             <button

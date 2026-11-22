@@ -4,7 +4,7 @@ import { fmtCount, fmtDuration, type Video } from "@/lib/piped";
 
 // Thumbnails come from the mirror's own image proxy; if one mirror is blocked, retry the same
 // image through another mirror before giving up.
-function Thumb({ v }: { v: Video }) {
+export function Thumb({ v }: { v: Video }) {
   const [index, setIndex] = useState(0);
   const candidates = v.thumbnails.length ? v.thumbnails : [v.thumbnail];
   const src = candidates[Math.min(index, candidates.length - 1)];

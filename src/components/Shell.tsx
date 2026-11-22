@@ -2,7 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { MirrorPicker } from "./MirrorPicker";
-import { urlVideoId } from "@/lib/piped";
+import { isShortUrl, urlVideoId } from "@/lib/piped";
 
 export function Shell({ children, initialQ = "" }: { children: ReactNode; initialQ?: string }) {
   const nav = useNavigate();
@@ -14,7 +14,8 @@ export function Shell({ children, initialQ = "" }: { children: ReactNode; initia
     if (!text) return;
     const id = urlVideoId(text);
     if (id) {
-      nav({ to: "/watch/$id", params: { id } });
+      if (isShortUrl(text)) nav({ to: "/shorts/$id", params: { id } });
+      else nav({ to: "/watch/$id", params: { id } });
       return;
     }
     nav({ to: "/search", search: { q: text } });
@@ -31,6 +32,13 @@ export function Shell({ children, initialQ = "" }: { children: ReactNode; initia
           <span className="rounded-sm border border-primary/40 px-1.5 py-0.5 font-sans text-[10px] font-semibold uppercase tracking-wider text-primary">
             proxied
           </span>
+        </Link>
+        <Link
+          to="/shorts"
+          className="rounded-sm border border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          activeProps={{ className: "text-primary border-primary" }}
+        >
+          Shorts
         </Link>
         <form
           role="search"
@@ -58,7 +66,7 @@ export function Shell({ children, initialQ = "" }: { children: ReactNode; initia
       </header>
       <main className="mx-auto w-[min(1360px,100%-2rem)] py-6 pb-16">{children}</main>
       <footer className="border-t border-border px-6 py-6 text-center text-xs text-muted-foreground">
-        OpenTube searches and plays YouTube through volunteer-run mirror proxies. Searches,
+        OpenTube searches and plays YouTube through volunteer-run mirror proxies. Searches, shorts,
         thumbnails and video all travel through this site's own relay, so neither YouTube nor the
         mirror host has to be reachable from your network. Nothing is hosted here.
       </footer>

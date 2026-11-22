@@ -20,6 +20,7 @@ export type Video = {
   duration?: number;
   views?: number;
   uploadedDate?: string;
+  isShort?: boolean;
 };
 
 export type MediaFile = { url: string; quality: string; itag: number };
@@ -57,11 +58,128 @@ export const BUILTINS: Backend[] = [
     web: "https://piped.ducks.party",
     image: "https://piped-proxy.ducks.party",
   },
+  {
+    id: "kavin",
+    label: "kavin.rocks",
+    api: "https://pipedapi.kavin.rocks",
+    web: "https://piped.video",
+  },
 ];
+
+// Documented public instances that are tried only after the visible mirrors fail. Availability
+// changes constantly, so racing them costs nothing when a mirror works and often rescues a video
+// that one instance's IP is being bot-checked on.
+const FALLBACKS: Backend[] = [
+  { id: "piped-yt", label: "piped.yt", api: "https://api.piped.yt", web: "https://piped.yt" },
+  {
+    id: "leptons",
+    label: "leptons.xyz",
+    api: "https://pipedapi.leptons.xyz",
+    web: "https://piped.leptons.xyz",
+  },
+  {
+    id: "nosebs",
+    label: "nosebs.ru",
+    api: "https://pipedapi.nosebs.ru",
+    web: "https://piped.nosebs.ru",
+  },
+  {
+    id: "libre",
+    label: "libre.kavin.rocks",
+    api: "https://pipedapi-libre.kavin.rocks",
+    web: "https://piped-libre.kavin.rocks",
+  },
+  {
+    id: "privacy-com-de",
+    label: "privacy.com.de",
+    api: "https://piped-api.privacy.com.de",
+    web: "https://piped.privacy.com.de",
+  },
+  {
+    id: "owo",
+    label: "owo.si",
+    api: "https://pipedapi.owo.si",
+    web: "https://piped.owo.si",
+  },
+  {
+    id: "codespace",
+    label: "codespace.cz",
+    api: "https://piped-api.codespace.cz",
+    web: "https://piped.codespace.cz",
+  },
+  {
+    id: "drgns",
+    label: "drgns.space",
+    api: "https://pipedapi.drgns.space",
+    web: "https://piped.drgns.space",
+  },
+  {
+    id: "orangenet",
+    label: "orangenet.cc",
+    api: "https://pipedapi.orangenet.cc",
+    web: "https://piped.orangenet.cc",
+  },
+];
+
+let discovered: Backend[] = [];
+let discoveredAt = 0;
+let discovering: Promise<void> | null = null;
+
+function webFromApi(host: string) {
+  return (
+    "https://" +
+    host
+      .replace(/^pipedapi-/, "piped-")
+      .replace(/^pipedapi\./, "piped.")
+      .replace(/^piped-api\./, "piped.")
+      .replace(/^api\.piped\./, "piped.")
+  );
+}
+
+// Discovers further mirrors from Piped's public instance list through this site's server. Best
+// effort: on a network without the list, the built-in and fallback mirrors are still used.
+export async function discoverMirrors(): Promise<void> {
+  if (typeof window === "undefined") return;
+  if (Date.now() - discoveredAt < 10 * 60_000) return;
+  if (discovering) return discovering;
+  discovering = (async () => {
+    try {
+      const res = await fetch("/api/mirrors", { headers: { Accept: "application/json" } });
+      if (!res.ok) return;
+      const body = (await res.json()) as { mirrors?: { api?: string }[] };
+      const found: Backend[] = [];
+      for (const item of body.mirrors ?? []) {
+        if (typeof item.api !== "string") continue;
+        try {
+          const url = new URL(item.api);
+          if (url.protocol !== "https:") continue;
+          found.push({
+            id: "auto:" + url.host,
+            label: url.host,
+            api: url.origin + url.pathname.replace(/\/+$/, ""),
+            web: webFromApi(url.host),
+          });
+        } catch {
+          /* skip malformed entry */
+        }
+      }
+      if (found.length) {
+        discovered = found;
+        window.dispatchEvent(new Event("ot-mirrors"));
+      }
+    } catch {
+      /* discovery is optional */
+    } finally {
+      discoveredAt = Date.now();
+      discovering = null;
+    }
+  })();
+  return discovering;
+}
 
 const CUSTOM_KEY = "ot.customMirror.v1";
 const ACTIVE_KEY = "ot.activeMirror.v1";
-const TIMEOUT = 15000;
+const TIMEOUT = 10_000;
 
 // Puts a remote URL behind this site's relay. The short base64url form keeps blockable hostnames
 // out of the path, so a network that filters URLs is not tipped off by "googlevideo" or "piped".
@@ -122,7 +240,7 @@ function parseMirror(raw: string): Backend | null {
 export function mirrors(): Backend[] {
   const raw = store.get(CUSTOM_KEY);
   const custom = raw ? parseMirror(raw) : null;
-  return custom ? [...BUILTINS, custom] : [...BUILTINS];
+  return [...BUILTINS, ...discovered, ...(custom ? [custom] : [])];
 }
 
 export function activeMirror(): Backend {
@@ -163,6 +281,10 @@ export function urlVideoId(input: string) {
   return /youtu\.?be/i.test(input) ? videoId(input) : "";
 }
 
+export function isShortUrl(input: string) {
+  return /youtu\.?be\/shorts\//i.test(input);
+}
+
 // A mirror answering with an extraction error (age-gated, region-locked, bot check) is a very
 // different problem from a mirror that cannot be reached, and the UI should say which.
 export class MirrorError extends Error {
@@ -180,9 +302,9 @@ function upstreamMessage(raw: string) {
   return line.replace(/^[\w.$]+(?:Exception|Error):\s*/, "").slice(0, 200);
 }
 
-async function request<T>(backend: Backend, path: string): Promise<T> {
+async function request<T>(backend: Backend, path: string, timeout = TIMEOUT): Promise<T> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT);
+  const timer = setTimeout(() => controller.abort(), timeout);
   try {
     const remote = backend.api + path;
     // Queries run in the browser, where the mirror host may be blocked but this origin is not.
@@ -209,7 +331,8 @@ async function request<T>(backend: Backend, path: string): Promise<T> {
   }
 }
 
-// Try the mirror the user picked first, then race the rest so one dead host never breaks a page.
+// Try the mirror the user picked first, then race every other source so one bad host IP never
+// turns into a dead page. Discovery and fallbacks are only paid for on the failure path.
 async function api<T>(path: string): Promise<{ data: T; backend: Backend }> {
   const primary = activeMirror();
   let primaryFailure: Error | undefined;
@@ -219,12 +342,21 @@ async function api<T>(path: string): Promise<{ data: T; backend: Backend }> {
     primaryFailure = error as Error;
   }
 
-  const others = mirrors().filter((b) => b.api !== primary.api);
+  // Discovery runs alongside the race: the documented fallbacks are tried immediately, and any
+  // newly discovered instance is available for the next failure without delaying this one.
+  void discoverMirrors();
+  const others = [...mirrors(), ...FALLBACKS].filter(
+    (backend, index, all) =>
+      backend.api !== primary.api && all.findIndex((b) => b.api === backend.api) === index,
+  );
   try {
     const hit = await Promise.any(
-      others.map(async (backend) => ({ data: await request<T>(backend, path), backend })),
+      others.map(async (backend) => ({
+        data: await request<T>(backend, path, 10_000),
+        backend,
+      })),
     );
-    if (hit.backend.id !== primary.id) setActiveMirror(hit.backend.id);
+    if (hit.backend.api !== primary.api) setActiveMirror(hit.backend.id);
     return hit;
   } catch (error) {
     const failures = [
@@ -234,11 +366,16 @@ async function api<T>(path: string): Promise<{ data: T; backend: Backend }> {
     const upstream = failures.filter(
       (e): e is MirrorError => e instanceof MirrorError && e.upstream,
     );
-    if (upstream.length > 0 && upstream.length === failures.length) {
-      throw new MirrorError(`The mirror couldn't load this: ${upstream[0]!.message}`, true);
+    // A refusal from any source that answered is more useful than "unreachable", even when the
+    // other fallback hosts happen to be down.
+    if (upstream.length > 0) {
+      throw new MirrorError(
+        `YouTube refused this video on the sources that answered (${upstream[0]!.message}). That is usually temporary — try again in a moment or pick another source.`,
+        true,
+      );
     }
     throw new MirrorError(
-      "Every mirror is unreachable right now. Pick a different mirror from the source menu, or try again in a moment.",
+      "Every source is unreachable right now. Check your connection, then try again or pick another source.",
     );
   }
 }
@@ -295,6 +432,7 @@ function toVideo(x: Raw, backend: Backend): Video {
     duration: x?.duration,
     views: x?.views,
     uploadedDate: x?.uploadedDate,
+    isShort: Boolean(x?.isShort),
   };
 }
 
@@ -305,8 +443,8 @@ function clean(items: Raw[], backend: Backend): Video[] {
     .filter((v) => v.id);
 }
 
-export const trending = async (): Promise<Video[]> => {
-  const { data, backend } = await api<Raw[]>("/trending?region=US");
+export const trending = async (region = "US"): Promise<Video[]> => {
+  const { data, backend } = await api<Raw[]>(`/trending?region=${region}`);
   return clean(Array.isArray(data) ? data : [], backend);
 };
 
@@ -317,8 +455,7 @@ export const search = async (q: string): Promise<Video[]> => {
   return clean(data.items ?? [], backend);
 };
 
-export const stream = async (id: string): Promise<Stream> => {
-  const { data: d, backend } = await api<Raw>("/streams/" + id);
+function toStream(d: Raw, backend: Backend, id: string): Stream {
   const files: MediaFile[] = (Array.isArray(d?.videoStreams) ? d.videoStreams : [])
     .filter(
       (v: Raw) =>
@@ -354,7 +491,92 @@ export const stream = async (id: string): Promise<Stream> => {
     files,
     backend,
   };
+}
+
+export const stream = async (id: string): Promise<Stream> => {
+  const { data, backend } = await api<Raw>("/streams/" + id);
+  return toStream(data, backend, id);
 };
+
+// Try one chosen source, for when automatic failover has already given up on a video.
+export const streamFrom = async (id: string, backend: Backend): Promise<Stream> =>
+  toStream(await request<Raw>(backend, "/streams/" + id), backend, id);
+
+// YouTube's oEmbed endpoint is separate from watch access, so it still answers while mirrors are
+// bot-checked. Keeping the title, channel and thumbnail lets the page stay useful.
+export type Preview = { title: string; author: string; thumbnail: string };
+
+export async function preview(id: string): Promise<Preview> {
+  const remote =
+    "https://www.youtube.com/oembed?url=" +
+    encodeURIComponent(`https://www.youtube.com/watch?v=${id}`) +
+    "&format=json";
+  const res = await fetch(typeof window === "undefined" ? remote : relayUrl(remote), {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) throw new MirrorError("No details available for this video");
+  const data = (await res.json()) as {
+    title?: string;
+    author_name?: string;
+    thumbnail_url?: string;
+  };
+  if (!data.title) throw new MirrorError("No details available for this video");
+  return {
+    title: data.title,
+    author: data.author_name ?? "",
+    thumbnail: data.thumbnail_url ? relayUrl(data.thumbnail_url) : "",
+  };
+}
+
+// Shorts are not in Piped's search API, but the (undocumented) channel tabs endpoint accepts the
+// same content filter its own frontend uses. Gather a few recent shorts from popular channels.
+const SHORTS_CHANNELS: { id: string; label: string }[] = [
+  { id: "UCX6OQ3DkcsbYNE6H8uQQuVA", label: "MrBeast" },
+  { id: "UCRijo3ddMTht_IHyNSNXpNQ", label: "Dude Perfect" },
+  { id: "UCY1kMZp36IQSyNx_9h4mpCg", label: "Mark Rober" },
+  { id: "UCBJycsmduvYEL83R_U4JriQ", label: "Marques Brownlee" },
+  { id: "UC7_YxT-KID8kRbqZo7MyscQ", label: "Markiplier" },
+  { id: "UCq-Fj5jknLsUf-MWSy4_brA", label: "T-Series" },
+];
+
+function shortsTabPath(channelId: string) {
+  const data = {
+    originalUrl: `youtube.com/channel/${channelId}/shorts`,
+    url: `youtube.com/channel/${channelId}/shorts`,
+    id: channelId,
+    contentFilters: ["shorts"],
+    sortFilter: "",
+    baseUrl: "youtube.com",
+  };
+  return "/channels/tabs?data=" + encodeURIComponent(JSON.stringify(data));
+}
+
+export async function shortsFeed(): Promise<Video[]> {
+  const first = await api<{ content?: Raw[] }>(shortsTabPath(SHORTS_CHANNELS[0]!.id));
+  const backend = first.backend;
+  const lanes: Video[][] = [clean(first.data.content ?? [], backend).slice(0, 8)];
+
+  // One working source is enough: the remaining channels reuse it instead of failing over again.
+  const rest = await Promise.allSettled(
+    SHORTS_CHANNELS.slice(1).map(async (channel) => {
+      try {
+        const data = await request<{ content?: Raw[] }>(backend, shortsTabPath(channel.id), 10_000);
+        return clean(data.content ?? [], backend).slice(0, 8);
+      } catch {
+        const retry = await api<{ content?: Raw[] }>(shortsTabPath(channel.id));
+        return clean(retry.data.content ?? [], retry.backend).slice(0, 8);
+      }
+    }),
+  );
+  for (const lane of rest)
+    if (lane.status === "fulfilled" && lane.value.length) lanes.push(lane.value);
+
+  // Interleave the channels so the grid is not six videos from one uploader in a row.
+  const out: Video[] = [];
+  for (let i = 0; i < 8; i++) for (const lane of lanes) if (lane[i]) out.push(lane[i]!);
+  const seen = new Set<string>();
+  return out.filter((v) => (seen.has(v.id) ? false : (seen.add(v.id), true)));
+}
 
 // Proxy routes first: the embed and its video are served by the mirror. YouTube direct stays as a
 // last resort for networks where it happens to be reachable.

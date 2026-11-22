@@ -11,7 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as ApiMirrorsRouteImport } from './routes/api/mirrors'
 import { Route as ApiProxyRouteImport } from './routes/api/proxy'
+import { Route as ShortsIndexRouteImport } from './routes/shorts.index'
+import { Route as ShortsIdRouteImport } from './routes/shorts.$id'
 import { Route as WatchIdRouteImport } from './routes/watch.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -24,9 +27,24 @@ const SearchRoute = SearchRouteImport.update({
   path: '/search',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMirrorsRoute = ApiMirrorsRouteImport.update({
+  id: '/api/mirrors',
+  path: '/api/mirrors',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiProxyRoute = ApiProxyRouteImport.update({
   id: '/api/proxy',
   path: '/api/proxy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShortsIndexRoute = ShortsIndexRouteImport.update({
+  id: '/shorts/',
+  path: '/shorts/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShortsIdRoute = ShortsIdRouteImport.update({
+  id: '/shorts/$id',
+  path: '/shorts/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WatchIdRoute = WatchIdRouteImport.update({
@@ -38,35 +56,69 @@ const WatchIdRoute = WatchIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/search': typeof SearchRoute
+  '/api/mirrors': typeof ApiMirrorsRoute
   '/api/proxy': typeof ApiProxyRoute
+  '/shorts/$id': typeof ShortsIdRoute
   '/watch/$id': typeof WatchIdRoute
+  '/shorts/': typeof ShortsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/search': typeof SearchRoute
+  '/api/mirrors': typeof ApiMirrorsRoute
   '/api/proxy': typeof ApiProxyRoute
+  '/shorts/$id': typeof ShortsIdRoute
   '/watch/$id': typeof WatchIdRoute
+  '/shorts': typeof ShortsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/search': typeof SearchRoute
+  '/api/mirrors': typeof ApiMirrorsRoute
   '/api/proxy': typeof ApiProxyRoute
+  '/shorts/$id': typeof ShortsIdRoute
   '/watch/$id': typeof WatchIdRoute
+  '/shorts/': typeof ShortsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/search' | '/api/proxy' | '/watch/$id'
+  fullPaths:
+    | '/'
+    | '/search'
+    | '/api/mirrors'
+    | '/api/proxy'
+    | '/shorts/$id'
+    | '/watch/$id'
+    | '/shorts/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/search' | '/api/proxy' | '/watch/$id'
-  id: '__root__' | '/' | '/search' | '/api/proxy' | '/watch/$id'
+  to:
+    | '/'
+    | '/search'
+    | '/api/mirrors'
+    | '/api/proxy'
+    | '/shorts/$id'
+    | '/watch/$id'
+    | '/shorts'
+  id:
+    | '__root__'
+    | '/'
+    | '/search'
+    | '/api/mirrors'
+    | '/api/proxy'
+    | '/shorts/$id'
+    | '/watch/$id'
+    | '/shorts/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SearchRoute: typeof SearchRoute
+  ApiMirrorsRoute: typeof ApiMirrorsRoute
   ApiProxyRoute: typeof ApiProxyRoute
+  ShortsIdRoute: typeof ShortsIdRoute
   WatchIdRoute: typeof WatchIdRoute
+  ShortsIndexRoute: typeof ShortsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -85,11 +137,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SearchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mirrors': {
+      id: '/api/mirrors'
+      path: '/api/mirrors'
+      fullPath: '/api/mirrors'
+      preLoaderRoute: typeof ApiMirrorsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/proxy': {
       id: '/api/proxy'
       path: '/api/proxy'
       fullPath: '/api/proxy'
       preLoaderRoute: typeof ApiProxyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shorts/': {
+      id: '/shorts/'
+      path: '/shorts'
+      fullPath: '/shorts/'
+      preLoaderRoute: typeof ShortsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shorts/$id': {
+      id: '/shorts/$id'
+      path: '/shorts/$id'
+      fullPath: '/shorts/$id'
+      preLoaderRoute: typeof ShortsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/watch/$id': {
@@ -105,8 +178,11 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SearchRoute: SearchRoute,
+  ApiMirrorsRoute: ApiMirrorsRoute,
   ApiProxyRoute: ApiProxyRoute,
+  ShortsIdRoute: ShortsIdRoute,
   WatchIdRoute: WatchIdRoute,
+  ShortsIndexRoute: ShortsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
