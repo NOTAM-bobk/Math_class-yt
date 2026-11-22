@@ -9,9 +9,12 @@ export const Route = createFileRoute("/watch/$id")({
   head: () => ({
     meta: [
       { title: "Watch — OpenTube" },
-      { name: "description", content: "Watch a video through a mirror proxy on OpenTube." },
+      { name: "description", content: "Watch a video through this site's proxy on OpenTube." },
       { property: "og:title", content: "Watch — OpenTube" },
-      { property: "og:description", content: "Watch a video through a mirror proxy on OpenTube." },
+      {
+        property: "og:description",
+        content: "Watch a video through this site's proxy on OpenTube.",
+      },
       { property: "og:type", content: "video.other" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -49,22 +52,29 @@ function Watch() {
   });
   const [route, setRoute] = useState("");
   const [fileIndex, setFileIndex] = useState(0);
+  const [failed, setFailed] = useState(false);
 
-  // A new video should start from the default proxy route, not the last one picked.
+  // A new video should start from the default relayed route, not the last one picked.
   useEffect(() => {
     setRoute("");
     setFileIndex(0);
   }, [id]);
 
+  useEffect(() => setFailed(false), [id, route, fileIndex]);
+
   const data = s.data;
   const options = data ? players(id, data.backend) : [];
-  const proxies = options.filter((p) => p.proxied);
-  const direct = options.find((p) => !p.proxied);
-  const mirror = proxies.find((p) => p.id === route) ?? proxies[0];
+  const embeds = options.filter((p) => p.id !== "youtube");
+  const direct = options.find((p) => p.id === "youtube");
+  const embed = embeds.find((p) => p.id === route) ?? embeds[0];
   const file = data?.files[fileIndex] ?? data?.files[0];
-  const usingProxyStream = route === "proxy";
+  const hasFiles = Boolean(data?.files.length);
+  // Default to the relayed player: it is the only route that works when every third-party host
+  // is blocked. The mirror embeds are kept as a backup for networks that allow them.
+  const usingProxyStream = route === "proxy" || (route === "" && hasFiles);
   const usingDirect = route === "youtube";
-  const proxyHost = data ? new URL(data.backend.image ?? data.backend.web).host : "";
+  const usingEmbed = !usingProxyStream && !usingDirect;
+  const sourceHost = data ? new URL(data.backend.api).host : "";
 
   return (
     <Shell>
@@ -75,8 +85,16 @@ function Watch() {
               <MirrorError message={(s.error as Error).message} retry={() => void s.refetch()} />
             ) : !data ? (
               <div className="grid h-full place-items-center text-sm text-muted-foreground">
-                Loading through a mirror…
+                Loading through the proxy…
               </div>
+            ) : usingProxyStream && failed ? (
+              <MirrorError
+                message="This site's relay couldn't fetch the video file. Try the retry button, another mirror from the source menu, or an embedded route below."
+                retry={() => {
+                  setFailed(false);
+                  void s.refetch();
+                }}
+              />
             ) : usingProxyStream && file ? (
               <video
                 key={file.url}
@@ -85,6 +103,7 @@ function Watch() {
                 controls
                 autoPlay
                 playsInline
+                onError={() => setFailed(true)}
                 className="h-full w-full bg-black"
               />
             ) : usingDirect && direct ? (
@@ -97,10 +116,10 @@ function Watch() {
                 allowFullScreen
                 referrerPolicy="strict-origin-when-cross-origin"
               />
-            ) : mirror ? (
+            ) : embed ? (
               <iframe
-                key={mirror.src}
-                src={mirror.src}
+                key={embed.src}
+                src={embed.src}
                 title={data.title}
                 className="h-full w-full"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -112,24 +131,24 @@ function Watch() {
 
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>Route</span>
-            {proxies.map((p) => (
+            <button
+              onClick={() => setRoute("proxy")}
+              disabled={!hasFiles}
+              className={chip(usingProxyStream) + " disabled:opacity-40"}
+              title="Stream the video file through this site's own relay"
+            >
+              This site · direct stream
+            </button>
+            {embeds.map((p) => (
               <button
                 key={p.id}
                 onClick={() => setRoute(p.id)}
-                className={chip(!usingProxyStream && !usingDirect && p.id === mirror?.id)}
-                title={`Embedded player served by ${p.host}`}
+                className={chip(usingEmbed && p.id === embed?.id)}
+                title={`Embedded player served by ${p.host}; that host has to be reachable from your network`}
               >
                 {p.label} · {p.host}
               </button>
             ))}
-            <button
-              onClick={() => setRoute("proxy")}
-              disabled={!data?.files.length}
-              className={chip(usingProxyStream) + " disabled:opacity-40"}
-              title="Play the mirror's own video file inside this page"
-            >
-              Proxy stream
-            </button>
             {direct && (
               <button onClick={() => setRoute("youtube")} className={chip(usingDirect)}>
                 YouTube direct
@@ -139,13 +158,17 @@ function Watch() {
           <p className="mt-2 text-xs text-muted-foreground">
             {usingDirect ? (
               "This route contacts YouTube directly and will be blocked on filtered networks."
+            ) : usingProxyStream ? (
+              <>
+                The video is streamed through <span className="text-foreground">this site</span>,
+                which fetches it from {sourceHost}. Neither YouTube nor {sourceHost} has to be
+                reachable from your network.
+              </>
             ) : (
               <>
-                Video is served by{" "}
-                <span className="text-foreground">
-                  {usingProxyStream ? proxyHost : mirror?.host}
-                </span>
-                , not youtube.com.
+                This player is an embedded page on{" "}
+                <span className="text-foreground">{embed?.host}</span>, so that host has to be
+                reachable from your network. If it does not load, use the direct stream above.
               </>
             )}
           </p>

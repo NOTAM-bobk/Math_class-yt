@@ -58,9 +58,9 @@ export function Shell({ children, initialQ = "" }: { children: ReactNode; initia
       </header>
       <main className="mx-auto w-[min(1360px,100%-2rem)] py-6 pb-16">{children}</main>
       <footer className="border-t border-border px-6 py-6 text-center text-xs text-muted-foreground">
-        OpenTube searches and plays YouTube through volunteer-run mirror proxies. The page,
-        thumbnails and video are all served from a mirror host, so no YouTube domain has to be
-        reachable. Nothing is hosted here.
+        OpenTube searches and plays YouTube through volunteer-run mirror proxies. Searches,
+        thumbnails and video all travel through this site's own relay, so neither YouTube nor the
+        mirror host has to be reachable from your network. Nothing is hosted here.
       </footer>
     </div>
   );

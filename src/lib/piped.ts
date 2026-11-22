@@ -1,6 +1,6 @@
-// Volunteer-run Piped mirrors (CORS-open). Metadata, thumbnails and video all come from a
-// mirror host, so the browser never needs to reach youtube.com — which is what keeps this
-// page usable on networks where YouTube is blocked.
+// Volunteer-run Piped mirrors. Every request leaves through this site's own /api/proxy relay, so
+// the browser only ever talks to this origin. That matters on filtered networks, where the
+// mirror API, its image proxy and the video host are usually blocked too — not just YouTube.
 export type Backend = {
   id: string;
   label: string;
@@ -61,7 +61,19 @@ export const BUILTINS: Backend[] = [
 
 const CUSTOM_KEY = "ot.customMirror.v1";
 const ACTIVE_KEY = "ot.activeMirror.v1";
-const TIMEOUT = 8000;
+const TIMEOUT = 15000;
+
+// Puts a remote URL behind this site's relay. The short base64url form keeps blockable hostnames
+// out of the path, so a network that filters URLs is not tipped off by "googlevideo" or "piped".
+export function relayUrl(url: string) {
+  let encoded = "";
+  try {
+    encoded = btoa(url).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  } catch {
+    /* fall back to percent encoding below */
+  }
+  return "/api/proxy?u=" + (encoded || encodeURIComponent(url));
+}
 
 const store = {
   get(key: string) {
@@ -172,7 +184,10 @@ async function request<T>(backend: Backend, path: string): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT);
   try {
-    const res = await fetch(backend.api + path, {
+    const remote = backend.api + path;
+    // Queries run in the browser, where the mirror host may be blocked but this origin is not.
+    const target = typeof window === "undefined" ? remote : relayUrl(remote);
+    const res = await fetch(target, {
       signal: controller.signal,
       headers: { Accept: "application/json" },
     });
@@ -232,7 +247,7 @@ const YT_IMAGE_HOST = /(^|\.)(ytimg\.com|ggpht\.com|youtube\.com|googleuserconte
 
 // Piped proxies raw YouTube image URLs as /<path>?host=<original host>. Responses already proxied
 // by a mirror pass through untouched.
-export function proxyImage(url: string | undefined, backend: Backend): string {
+function mirrorImage(url: string, backend: Backend): string {
   if (!url) return "";
   try {
     const parsed = new URL(url);
@@ -245,8 +260,15 @@ export function proxyImage(url: string | undefined, backend: Backend): string {
   }
 }
 
+// Images go through the relay as well: the mirror's image host is its own domain and is blocked
+// on the same networks that block the API.
+export function proxyImage(url: string | undefined, backend: Backend): string {
+  if (!url) return "";
+  return relayUrl(mirrorImage(url, backend));
+}
+
 function thumbnailCandidates(id: string, url: string, backend: Backend): string[] {
-  const list = [proxyImage(url, backend)];
+  const list = [mirrorImage(url, backend)];
   if (id) {
     for (const mirror of mirrors()) {
       if (mirror.image && mirror.id !== backend.id) {
@@ -254,7 +276,8 @@ function thumbnailCandidates(id: string, url: string, backend: Backend): string[
       }
     }
   }
-  return [...new Set(list.filter(Boolean))];
+  const unique = [...new Set(list.filter(Boolean))];
+  return unique.length ? unique.map((candidate) => relayUrl(candidate)) : [];
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -306,7 +329,8 @@ export const stream = async (id: string): Promise<Stream> => {
         Number(v.itag) > 0,
     )
     .map((v: Raw) => ({
-      url: String(v.url),
+      // Relayed so the player never opens googlevideo.com (or the mirror's proxy host) itself.
+      url: relayUrl(String(v.url)),
       quality: String(v.quality ?? "auto"),
       itag: Number(v.itag),
     }))
@@ -339,10 +363,11 @@ export function players(id: string, backend: Backend): Player[] {
     .slice(0, 2)
     .map((b, i) => ({
       id: b.id,
-      label: i === 0 ? "Mirror" : "Backup",
+      label: i === 0 ? "Mirror embed" : "Backup embed",
       host: new URL(b.web).host,
       src: `${b.web}/embed/${id}?autoplay=1`,
-      proxied: true,
+      // The embed is a third-party page, so it cannot be relayed and needs that host reachable.
+      proxied: false,
     }));
 
   list.push({
