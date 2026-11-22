@@ -6,13 +6,16 @@ import { Status, VideoGrid } from "@/components/VideoGrid";
 import { trending } from "@/lib/piped";
 
 export const Route = createFileRoute("/")({
-  head: () => ({ meta: [
-    { title: "OpenTube — Watch trending videos" },
-    { name: "description", content: "Search and watch videos through community mirrors." },
-    { property: "og:title", content: "OpenTube — Watch trending videos" },
-    { property: "og:description", content: "Search and watch videos through community mirrors." },
-    { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" },
-  ] }),
+  head: () => ({
+    meta: [
+      { title: "OpenTube — Watch trending videos" },
+      { name: "description", content: "Search and watch videos through community mirrors." },
+      { property: "og:title", content: "OpenTube — Watch trending videos" },
+      { property: "og:description", content: "Search and watch videos through community mirrors." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   component: Home,
 });
 

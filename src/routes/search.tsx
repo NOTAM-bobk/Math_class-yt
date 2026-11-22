@@ -7,17 +7,27 @@ import { search } from "@/lib/piped";
 
 export const Route = createFileRoute("/search")({
   validateSearch: (s: Record<string, unknown>) => ({ q: typeof s["q"] === "string" ? s["q"] : "" }),
-  head: () => ({ meta: [
-    { title: "Search — OpenTube" }, { name: "description", content: "Search results on OpenTube." },
-    { property: "og:title", content: "Search — OpenTube" }, { property: "og:description", content: "Search results on OpenTube." },
-    { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" },
-  ] }),
+  head: () => ({
+    meta: [
+      { title: "Search — OpenTube" },
+      { name: "description", content: "Search results on OpenTube." },
+      { property: "og:title", content: "Search — OpenTube" },
+      { property: "og:description", content: "Search results on OpenTube." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: SearchPage,
 });
 
 function SearchPage() {
   const { q } = Route.useSearch();
-  const r = useQuery({ queryKey: ["search", q], queryFn: () => search(q), enabled: !!q, staleTime: 300_000 });
+  const r = useQuery({
+    queryKey: ["search", q],
+    queryFn: () => search(q),
+    enabled: !!q,
+    staleTime: 300_000,
+  });
   return (
     <Shell key={q} initialQ={q}>
       <Chips active={q} />

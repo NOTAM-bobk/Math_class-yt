@@ -81,11 +81,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "OpenTube" },
-      { name: "description", content: "Search and watch videos through community mirrors." },
+      { title: "OpenTube — Unblocked YouTube" },
+      {
+        name: "description",
+        content:
+          "Search and watch YouTube through community proxy mirrors, with no YouTube domains in the address bar.",
+      },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "OpenTube" },
-      { property: "og:description", content: "Search and watch videos through community mirrors." },
+      { property: "og:title", content: "OpenTube — Unblocked YouTube" },
+      {
+        property: "og:description",
+        content:
+          "Search and watch YouTube through community proxy mirrors, with no YouTube domains in the address bar.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
@@ -96,7 +104,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: appCss,
       },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap",
+      },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),
