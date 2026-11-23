@@ -1,0 +1,26 @@
+{
+  // Committed so `wrangler deploy` never tries to auto-configure the project
+  // (which rewrote vite.config.ts and failed the build). The Nitro build
+  // (`bun run build`) emits a ready-to-upload Cloudflare module Worker here.
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "math-class-yt",
+  "main": ".output/server/index.mjs",
+  "compatibility_date": "2026-11-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": ".output/public"
+  },
+  // Nitro already emits a fully bundled ES module graph, so Wrangler must not
+  // bundle it again; upload the emitted .mjs files as modules instead.
+  "no_bundle": true,
+  "rules": [
+    {
+      "type": "ESModule",
+      "globs": [".output/server/**/*.mjs", ".output/server/**/*.js"]
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
